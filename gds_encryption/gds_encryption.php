@@ -570,7 +570,7 @@ class GDS_Encryption_Class
 			{	
 				if(empty($options['private_key']))
 				{
-					$value = 'XXXXXXXXX';
+					$value = esc_html( '<<ENCRYPTED>>' );
 				}
 				else
 				{
