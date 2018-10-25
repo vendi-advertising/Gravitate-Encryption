@@ -27,6 +27,8 @@ $gds_encryption_enable_settings_page = true;
 
 class GDS_Encryption_Class
 {
+	const TRANSIENT_FOR_PRIVATE_KEY = 'vendi-private-key';
+
 	public function init()
 	{
 		$options = unserialize(get_option( 'gds_encryption' ));
@@ -567,7 +569,16 @@ class GDS_Encryption_Class
 				$value = $decrypted;
 			}
 			else if(strpos($value, "enx1:") !== false)
-			{	
+			{
+                //Try getting our Private Key from the site's transient first,
+                //this way we don't need to store it in the options table
+                //permanently.
+                $pk = get_transient( self::TRANSIENT_FOR_PRIVATE_KEY );
+                if( $pk )
+                {
+                	$options['private_key'] = $pk;
+                }
+
 				if(empty($options['private_key']))
 				{
 					$value = esc_html( '<<ENCRYPTED>>' );
@@ -687,6 +698,34 @@ class GDS_Encryption_Class
 
 	public function gform_get_field_value($value, $entry, $field, $input_id)
 	{
+		global $wpdb;
+
+		$options = unserialize(get_option( 'gds_encryption' ));
+
+		if($options['encription_type'] == 'asymmetric' && isset($_POST['input_'.$field['id']]) && empty($options['private_key']))
+		{
+			//Changed to handle POST values that result in an array
+			$ret = $_POST['input_'.$field['id']];
+			if( is_array( $ret ) )
+			{
+				$ret = implode( ',', $ret );
+			}
+			return $ret;
+
+			//Original
+			// return $_POST['input_'.$field['id']];
+		}
+
+		$meta_key = $field['id'];
+		if($input_id){
+			$meta_key = $input_id;
+		}
+		$sql = $wpdb->prepare("SELECT meta_value FROM ".$wpdb->prefix."gf_entry_meta WHERE `entry_id` = %d AND `meta_key` = %s", $entry['id'], $meta_key);
+		$detail = $wpdb->get_row($sql);
+		if($detail){
+			return $this->get_field_value($detail->meta_value);
+		}
+
 		return $this->get_field_value($value);
 	}
 
