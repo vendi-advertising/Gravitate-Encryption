@@ -626,11 +626,33 @@ class GDS_Encryption_Class
 	}
 
 	public function gform_save_field_value($value, $lead, $field, $form)
-	{		
-		return $this->new_field_value($value, $lead['id'], "GravityForms");
+	{
+		//The original version of this always encrypted everything,
+		//so we'll default to that.
+		$should_field_be_encrypted = true;
+
+		//Pass through a series of filters, each getting more specific, with the previous
+		//results always passing forward
+
+		//Override the global default
+		$should_field_be_encrypted = apply_filters("gds/encryption/should_field_be_encrypted", $should_field_be_encrypted);
+
+		//Override per form
+		$should_field_be_encrypted = apply_filters("gds/encryption/should_field_be_encrypted/{$form->id}", $should_field_be_encrypted);
+
+		//Override per form field
+		$should_field_be_encrypted = apply_filters("gds/encryption/should_field_be_encrypted/{$form->id}/{$field->id}", $should_field_be_encrypted);
+
+		//This is legacy for Vendi which tests by the label to be agnostic of the ID
+		$should_field_be_encrypted = apply_filters("gds/encryption/should_field_be_encrypted_by_label", $should_field_be_encrypted, $field->label);
+
+		if($should_field_be_encrypted){
+			return $this->new_field_value($value, $lead['id'], "GravityForms");
+		}
+
+		return $value;
 	}
-	
-	
+
 	public function get_field_value($value)
 	{
 
