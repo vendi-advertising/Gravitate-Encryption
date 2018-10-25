@@ -4,7 +4,7 @@
 Plugin Name: Gravitate Encryption
 Plugin URI: http://www.gravitatedesign.com/blog/wordpress-and-gravity-forms/
 Description: This plugin allows the data stored by Gravity forms and other Plugins to be Encrypted and even sent to another database if needed. The Plugin allows for Symmetric and A-Semmetric Encryption.
-Version: 1.0
+Version: 1.0.4
 Author: Gravitate
 Author URI: http://www.gravitatedesign.com
 */
@@ -30,14 +30,14 @@ class GDS_Encryption_Class
 	public function init()
 	{
 		$options = unserialize(get_option( 'gds_encryption' ));
-		
+
 		if((!empty($options['encription_type']) && $options['encription_type'] != 'encryption_none') || !empty($options['use_remote_storage']))
 		{
 			add_filter("gform_save_field_value", "gds_encryption_gform_save_field_value", 10, 4);
 		}
-		
+
 		add_filter("gform_get_input_value", "gds_encryption_gform_get_field_value", 10, 4);
-		
+
 		if(!empty($options['remote_database_removal']))
 		{
 			add_action("gform_delete_lead", "gds_encryption_gform_delete_lead");
@@ -46,19 +46,19 @@ class GDS_Encryption_Class
 	private function email_keys()
 	{
 		$msg = '';
-		
+
 		$subject = '';
-	
+
 		if(!empty($_POST['keys_email']) && $_POST['keys_type'] == 1)
 		{
 			$email = trim($_POST['keys_email']);
-			
+
 			$subject = 'Your Public and Private Keys';
-			
+
 			$msg = "Below are your Public and Private Keys. Make sure to Keep them for your records.\n\n* Warning: If you lose them and need them you will not be able to Decrypt the data once it has been Encrypted and all the data can be lost FOREVER!\n\n\n";
-			
+
 			// Create the keypair
-			
+
 			$config = array(
 			  "digest_alg" => "sha1",
 			  "private_key_bits" => 2048,
@@ -66,46 +66,46 @@ class GDS_Encryption_Class
 			  "encrypt_key" => false
 			);
 			$res = openssl_pkey_new($config);
-			
+
 			// Get private key
 			openssl_pkey_export($res, $privkey);
-			
+
 			$msg.= $privkey."\n";
-			
+
 			// Get public key
 			$pubkey=openssl_pkey_get_details($res);
 			$pubkey=$pubkey["key"];
-			
+
 			$msg.= $pubkey;
 		}
 		else if(!empty($_POST['keys_email']) && $_POST['keys_type'] == 2)
 		{
 			$email = trim($_POST['keys_email']);
-			
+
 			$subject = 'Your Encryption Key';
-			
+
 			$msg = "Below is the Key. Make sure to Keep it for your records.\n\n* Warning: If you lose it and need it you will not be able to Decrypt the data once it has been Encrypted and all the data can be lost FOREVER!\n\n\n";
-			
+
 			$msg.= md5(time().rand(100,999));
 		}
-		
+
 		if(wp_mail( $email, $subject, $msg ))
 		{
 		    return true;
 		}
 		return false;
-		
+
 	}
-	
-	public function custom_submenu_page_callback() 
+
+	public function custom_submenu_page_callback()
 	{
-	
+
 		$page_link = substr($_SERVER['REQUEST_URI'], 0, strpos($_SERVER['REQUEST_URI'], '?'));
-	
+
 		$sent_keys = false;
-		
+
 		$encryption_test = "Here's My Phone Number (123) 123-1234";
-		
+
 		if(!empty($_POST['keys_email']) && !empty($_POST['keys_type']))
 		{
 			if($this->email_keys())
@@ -113,21 +113,30 @@ class GDS_Encryption_Class
 				$sent_keys = true;
 			}
 		}
-	
+
 		$update = false;
 		if(!empty($_POST['action']))
 		{
-		
+
 			$options = get_option( 'gds_encryption' );
-			
+
 			$update = 'error';
 			$value = serialize($_POST);
-			
+
+			$checkmarks = array('encrypt_all_gravity_forms', 'use_remote_storage', 'remote_database_removal');
+			foreach ($checkmarks as $checkmark)
+			{
+				if(empty($_POST[$checkmark]))
+				{
+					$_POST[$checkmark] = 0;
+				}
+			}
+
 			if(md5($options) == md5($value))
 			{
 				$update = true;
 			}
-			else 
+			else
 			{
 				if(update_option( 'gds_encryption', $value ))
 				{
@@ -139,18 +148,18 @@ class GDS_Encryption_Class
 				}
 			}
 		}
-	
-	
+
+
 		$mcrypt_available = (function_exists('mcrypt_encrypt') ? true : false);
 		$openssl_available = (function_exists('openssl_seal') ? true : false);
-		
+
 		$options = unserialize(get_option( 'gds_encryption' ));
-		
+
 		if(!empty($_POST['submit']) && $_POST['submit'] == 'Save Changes & Test Database')
 		{
 			$this->database_test();
 		}
-	
+
 		$form_fields_defaults = array('encription_type' => 'symmetric',
 							 'public_key' => '',
 							 'private_key' => '',
@@ -168,30 +177,30 @@ class GDS_Encryption_Class
 							 'remote_database_table_parent_id' => 'parent_id',
 							 'remote_database_table_value' => 'value',
 							 'remote_database_table_group' => 'group');
-							 
+
 		if(!$mcrypt_available)
 		{
 			$form_fields_defaults['encription_type'] = 'encryption_weak';
 		}
-		
+
 		$form_fields = array();
-		foreach ($form_fields_defaults as $key => $value) 
+		foreach ($form_fields_defaults as $key => $value)
 		{
-			if(!empty($_POST[$key]))
+			if(isset($_POST[$key]))
 			{
 				$form_fields[$key] = $_POST[$key];
 			}
-			else if(!empty($options[$key]))
+			else if(isset($options[$key]))
 			{
 				$form_fields[$key] = $options[$key];
 			}
-			else 
+			else
 			{
 				$form_fields[$key] = $value;
 			}
 		}
-		
-		
+
+
 		?>
 		<script type="text/javascript">
 		<!--//
@@ -202,32 +211,32 @@ class GDS_Encryption_Class
 				document.getElementById('public_key_container').style.display = '';
 				document.getElementById('private_key_container').style.display = '';
 			}
-			else 
+			else
 			{
 				document.getElementById('public_key_container').style.display = 'none';
 				document.getElementById('private_key_container').style.display = 'none';
 			}
-			
+
 			if(document.getElementById('symmetric').checked || document.getElementById('encryption_weak').checked)
 			{
 				document.getElementById('encryption_key_container').style.display = '';
 			}
-			else 
+			else
 			{
 				document.getElementById('encryption_key_container').style.display = 'none';
 			}
-			
+
 			if(document.getElementById('encryption_none').checked)
 			{
 				document.getElementById('encrypt_all_gravity_forms_container').style.display = 'none';
 				document.getElementById('enc_test_container').style.display = 'none';
 			}
-			else 
+			else
 			{
 				document.getElementById('encrypt_all_gravity_forms_container').style.display = '';
 				document.getElementById('enc_test_container').style.display = '';
 			}
-			
+
 			if(document.getElementById('use_remote_storage').checked)
 			{
 				document.getElementById('remote_database_host_container').style.display = '';
@@ -243,7 +252,7 @@ class GDS_Encryption_Class
 				document.getElementById('remote_database_table_group_container').style.display = '';
 				document.getElementById('submit_test').style.display = '';
 			}
-			else 
+			else
 			{
 				document.getElementById('remote_database_host_container').style.display = 'none';
 				document.getElementById('remote_database_port_container').style.display = 'none';
@@ -258,7 +267,7 @@ class GDS_Encryption_Class
 				document.getElementById('remote_database_table_group_container').style.display = 'none';
 				document.getElementById('submit_test').style.display = 'none';
 			}
-		
+
 		}
 		function gds_encryption_generate_keys(type)
 		{
@@ -286,8 +295,8 @@ class GDS_Encryption_Class
 		//-->
 		</script>
 		<form action="<?php echo $page_link;?>?page=gds-encryption-custom-submenu-page" method="post" name="submit_keys" id="submit_keys">
-		  <input type="hidden" value="" name="keys_email" id="keys_email">  
-		  <input type="hidden" value="" name="keys_type" id="keys_type">  
+		  <input type="hidden" value="" name="keys_email" id="keys_email">
+		  <input type="hidden" value="" name="keys_type" id="keys_type">
 		</form>
 		<div class="wrap">
 		      <div class="icon32" id="icon-options-general"><br></div>
@@ -306,7 +315,7 @@ class GDS_Encryption_Class
 		                  <legend class="screen-reader-text"><span>Type</span></legend>
 		                  <label for="symmetric">
 		                    <input type="radio"<?php if($form_fields['encription_type'] == 'symmetric'){?> checked="checked"<?php } ?> value="symmetric" id="symmetric" name="encription_type" onclick="gds_encryption_update_form();"<?php if(!$mcrypt_available){?> disabled="disabled"<?php } ?> />
-		                    Symmetric (Standard)</label><?php if(!$mcrypt_available){?><span style="color:red;"> &nbsp; ( Unavailable, You need <u>Mcrypt</u> installed on the server )</span><?php }else{ ?><span style="color:green;"> &nbsp; ( Available )</span><?php } ?><br/> 
+		                    Symmetric (Standard)</label><?php if(!$mcrypt_available){?><span style="color:red;"> &nbsp; ( Unavailable, You need <u>Mcrypt</u> installed on the server )</span><?php }else{ ?><span style="color:green;"> &nbsp; ( Available )</span><?php } ?><br/>
 		                  <label for="asymmetric">
 		                    <input type="radio"<?php if($form_fields['encription_type'] == 'asymmetric'){?> checked="checked"<?php } ?> value="asymmetric" id="asymmetric" name="encription_type" onclick="gds_encryption_update_form();"<?php if(!$openssl_available){?> disabled="disabled"<?php } ?> />
 		                    A-Symmetric (For Advanced Users)</label><?php if(!$openssl_available){?><span style="color:red;"> &nbsp; ( Unavailable, You need <u>Openssl</u> installed on the server )</span><?php }else{ ?><span style="color:green;"> &nbsp; ( Available )</span><?php } ?><br/>
@@ -335,7 +344,7 @@ class GDS_Encryption_Class
 					  <th scope="row"><label for="encryption_key">Encryption Key</label></th>
 					  <td>
 					  	<span style="font-size: 10px; color: gray;">Should be between 8-32 characters and use Number, Letters, and Symbols</span><br/>
-					  	<input type="text" id="encryption_key" name="encryption_key" maxlength="32" value="<?php echo $form_fields['encryption_key'];?>" /> &nbsp; 
+					  	<input type="text" id="encryption_key" name="encryption_key" maxlength="32" value="<?php echo $form_fields['encryption_key'];?>" /> &nbsp;
 					  	<?php if($mcrypt_available){?><a class="button" href="javascript:gds_encryption_generate_keys(2);">Auto Create Key</a><?php } ?>
 					  </td>
 					</tr>
@@ -429,7 +438,7 @@ class GDS_Encryption_Class
 		          </tbody>
 		        </table>
 		        <p class="submit">
-		          <input type="submit" value="Save Changes" class="button button-primary" id="submit" name="submit"> &nbsp; 
+		          <input type="submit" value="Save Changes" class="button button-primary" id="submit" name="submit"> &nbsp;
 		          <input type="submit" value="Save Changes & Test Database" class="button button-primary" id="submit_test" name="submit">
 		        </p>
 		      </form>
@@ -444,7 +453,7 @@ class GDS_Encryption_Class
 		      <?php } ?>
 		      </div>
 		      <?php } ?>
-	
+
 		      <br/>
 		      <h2>Use this plugin with other Plugins or in your functions.php file of your theme</h2>
 		      <h3>Here are the functions you can use:</h3>
@@ -461,17 +470,17 @@ class GDS_Encryption_Class
 		<script type="text/javascript">gds_encryption_update_form();</script>
 		<?php
 	}
-	
-	private function get_database_link() 
+
+	private function get_database_link()
 	{
 		$options = unserialize(get_option( 'gds_encryption' ));
 		return mysqli_connect($options['remote_database_host'], $options['remote_database_username'], $options['remote_database_password'], $options['remote_database_name'], $options['remote_database_port']);
 	}
-	
-	private function database_test() 
+
+	private function database_test()
 	{
 		$options = unserialize(get_option( 'gds_encryption' ));
-		
+
 		if(!empty($options['remote_database_username']))
 		{
 			$link = GDS_Encryption_Class::get_database_link();
@@ -483,7 +492,7 @@ class GDS_Encryption_Class
 				</div>
 			<?php
 			}
-			else 
+			else
 			{
 			?>
 				<div class="updated">
@@ -492,7 +501,7 @@ class GDS_Encryption_Class
 			<?php
 			}
 		}
-		else 
+		else
 		{
 		?>
 			<div class="error">
@@ -501,15 +510,15 @@ class GDS_Encryption_Class
 		<?php
 		}
 	}
-	
+
 	public function encrypt($value)
 	{
 		$options = unserialize(get_option( 'gds_encryption' ));
-		
+
 		///////////////////////////////////////////////////////////////////////////////////////////////////
 		// Symmetric Encryption
 		///////////////////////////////////////////////////////////////////////////////////////////////////
-		
+
 		if($options['encription_type'] == 'symmetric')
 		{
 			 $salt = "djkns(235mk^p";
@@ -520,27 +529,27 @@ class GDS_Encryption_Class
 			 $encrypted = base64_encode(mcrypt_encrypt(MCRYPT_RIJNDAEL_128, $key, $value . md5($value), MCRYPT_MODE_CBC, $iv));
 			 $value = "enx2:".$iv_base64 . $encrypted;
 		}
-		else if($options['encription_type'] == 'asymmetric') 
+		else if($options['encription_type'] == 'asymmetric')
 		{
 			openssl_seal($value, $encrypted, $ekey, array(openssl_get_publickey(trim($options['public_key']))));
 			$ekey = base64_encode($ekey[0]);
-			
+
 			$value = "enx1:".$ekey.':'.base64_encode($encrypted);
 		}
-		else if($options['encription_type'] == 'encryption_weak') 
+		else if($options['encription_type'] == 'encryption_weak')
 		{
 			$key = "7%r?1C".trim($options['encryption_key'])."jr-3";
 			$value = base64_encode($value);
 			$value = "enx3:".base64_encode(substr($value, 0, 3).substr($value, 0, -5).substr(base64_encode($key), 0, 6).substr($value, -5).substr($value, -3));
 		}
-		
+
 		return $value;
 	}
-	
+
 	public function decrypt($value)
 	{
 		$options = unserialize(get_option( 'gds_encryption' ));
-		
+
 		if(strpos($value, "enx") !== false)
 		{
 			if(strpos($value, "enx2:") !== false)
@@ -563,14 +572,14 @@ class GDS_Encryption_Class
 				{
 					$value = 'XXXXXXXXX';
 				}
-				else 
+				else
 				{
 					$value = str_replace("enx1:", "", $value);
 					$split = explode(":", $value); // Split the String on : (Colon).  First part is the Envelope Key. Second Part is the Encrypted Data.
 					$envelope_key = base64_decode($split[0]);
 					$encrypted_data = base64_decode($split[1]);
 					openssl_open($encrypted_data, $decrypted_data, $envelope_key, openssl_get_privatekey(trim($options['private_key'])));
-					
+
 					$value = $decrypted_data;
 				}
 			}
@@ -582,25 +591,25 @@ class GDS_Encryption_Class
 				$value = base64_decode(str_replace(substr(base64_encode($key), 0, 6), '', $value));
 			}
 		}
-		
+
 		return $value;
 	}
-	
+
 	public function new_field_value($value, $parent_id, $group)
 	{
-			
+
 		$new_value = '';
-		
+
 		if(empty($value))
 		{
 			return $value;
 		}
-	
-		/* 
-		Multi-input fields such as Name and Address will be represented as an array, 
+
+		/*
+		Multi-input fields such as Name and Address will be represented as an array,
 		so each item needs to be encrypted individually
 		*/
-			
+
 		if(is_array($value))
 		{
 		    foreach($value as $key => $input_value)
@@ -610,12 +619,12 @@ class GDS_Encryption_Class
 		    $new_value = $value;
 		}
 		$new_value = $this->encrypt($value);
-		
+
 		$new_value = $this->save_to_remote($new_value, $parent_id, $group);
-			
+
 		return $new_value;
 	}
-	
+
 	public function gform_save_field_value($value, $lead, $field, $form)
 	{		
 		return $this->new_field_value($value, $lead['id'], "GravityForms");
@@ -624,24 +633,24 @@ class GDS_Encryption_Class
 	
 	public function get_field_value($value)
 	{
-	
+
 		if(empty($value))
 		{
 			return $value;
 		}
-		
+
 		if(strpos($value, 'remoteID:') !== false)
 		{
 			$split = explode(":", $value);
 			$id = $split[1];
 			$value = $this->get_from_remote($id);
 		}
-	
-	    /* 
-	    Multi-input fields such as Name and Address will be represented as an array, 
-	    so each item needs to be decrypted individually 
+
+	    /*
+	    Multi-input fields such as Name and Address will be represented as an array,
+	    so each item needs to be decrypted individually
 	    */
-	    
+
 	    if(is_array($value))
 	    {
 	        foreach($value as $key => $input_value)
@@ -650,46 +659,51 @@ class GDS_Encryption_Class
 	        }
 	        return $value;
 	    }
-	
+
 	    return $this->decrypt($value);
 	}
-	
-	public function gform_get_field_value($value, $lead, $field, $input_id)
+
+	public function gform_get_field_value($value, $entry, $field, $input_id)
 	{
 		return $this->get_field_value($value);
 	}
-	
+
 	public function save_to_remote($value, $lead_id, $group="")
 	{
+		global $wpdb;
+
 		$options = unserialize(get_option( 'gds_encryption' ));
-		
+
 		if(!empty($options['use_remote_storage']))
 		{
 			$link = GDS_Encryption_Class::get_database_link();
-			
+
 			if($link)
 			{
-				if (mysqli_query($link, "INSERT INTO " . $options['remote_database_table'] . " (`" . $options['remote_database_table_value'] . "`, `" . $options['remote_database_table_parent_id'] . "`, `" . $options['remote_database_table_group'] . "`) VALUES ('" . mysqli_real_escape_string($link, $value) . "', '" . mysqli_real_escape_string($link, $lead_id) . "', '" . mysqli_real_escape_string($link, $group) . "')"))
+				$sql = "INSERT INTO " . mysqli_real_escape_string($link, $options['remote_database_table']) . " (`" . mysqli_real_escape_string($link, $options['remote_database_table_value']) . "`, `" . mysqli_real_escape_string($link, $options['remote_database_table_parent_id']) . "`, `" . mysqli_real_escape_string($link, $options['remote_database_table_group']) . "`) VALUES ( '".mysqli_real_escape_string($link, $value)."', '".mysqli_real_escape_string($link, $lead_id)."', '".mysqli_real_escape_string($link, $group)."' )";
+				if (mysqli_query($link, $sql))
 				{
 					return "remoteID:".mysqli_insert_id($link);
 				}
 			}
 		}
-		
+
 		return $value;
-		
+
 	}
-	
+
 	public function get_from_remote($id)
 	{
-	
+		global $wpdb;
+
 		$options = unserialize(get_option( 'gds_encryption' ));
-			
+
 		$link = GDS_Encryption_Class::get_database_link();
-		
+
 		if($link)
 		{
-			if ($result = mysqli_query($link, "SELECT `" . $options['remote_database_table_value'] . "` FROM " . $options['remote_database_table'] . " WHERE `" . $options['remote_database_table_id'] . "` = '" . mysqli_real_escape_string($link, $id) . "'")) 
+			$sql = "SELECT `" . mysqli_real_escape_string($link, $options['remote_database_table_value']) . "` FROM " . mysqli_real_escape_string($link, $options['remote_database_table']) . " WHERE `" . mysqli_real_escape_string($link, $options['remote_database_table_id']) . "` = '".mysqli_real_escape_string($link, $id)."'";
+			if($result = mysqli_query($link, $sql))
 			{
 				if($row = mysqli_fetch_assoc($result))
 				{
@@ -702,18 +716,21 @@ class GDS_Encryption_Class
 		}
 		return $value;
 	}
-	
+
 	public function delete_entry($parent_id, $group="")
 	{
+		global $wpdb;
+
 	    $options = unserialize(get_option( 'gds_encryption' ));
-	    
+
 	    if(!empty($options['remote_database_removal']))
 	    {
 		    $link = GDS_Encryption_Class::get_database_link();
-		    
+
 		    if($link)
 		    {
-		    	mysqli_query($link, "DELETE FROM " . $options['remote_database_table'] . " WHERE `" . $options['remote_database_table_parent_id'] . "` = '" . mysqli_real_escape_string($link, $parent_id) . "' AND `" . $options['remote_database_table_group'] . "` = '" . mysqli_real_escape_string($link, $group) . "'");
+				$sql = "DELETE FROM " . mysqli_real_escape_string($link, $options['remote_database_table']) . " WHERE `" . mysqli_real_escape_string($link, $options['remote_database_table_parent_id']) . "` = '".mysqli_real_escape_string($link, $parent_id)."' AND `" . mysqli_real_escape_string($link, $options['remote_database_table_group']) . "` = '".mysqli_real_escape_string($link, $group)."'";
+		    	mysqli_query($link, $sql);
 		    }
 	    }
 	}
@@ -724,7 +741,7 @@ function gds_encryption_custom_submenu_page()
 	if(class_exists('GDS_Class'))
 	{
 		global $gds_class;
-		
+
 		if(isset($gds_class->included_plugins))
 		{
 			$gds_class->included_plugins[] = array('GDS_Encryption_Class', 'gravitate', 'Encryption', 'Encryption', 'manage_options', 'gds-encryption-custom-submenu-page', 'gds_encryption_custom_submenu_page_callback');
@@ -793,7 +810,7 @@ function gds_encryption_prevent_update_check( $r, $url ) {
 }
 add_filter('site_transient_update_plugins', 'gds_encryption_remove_update_nag');
 function gds_encryption_remove_update_nag($value) {
- unset($value->response[ plugin_basename(__FILE__) ]);
+ if(isset($value->response[ plugin_basename(__FILE__) ])) unset($value->response[ plugin_basename(__FILE__) ]);
  return $value;
 }
 
